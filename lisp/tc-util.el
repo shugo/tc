@@ -704,6 +704,23 @@ leim パッケージが入っていなければ使うことはできない。
   (if char
       (zap-to-char arg char)))
 
+;;;; トグルではなく、ON/OFFキーを使用
+
+;;;###autoload
+(defun tcode-activate-input-method ()
+  (interactive)
+  (activate-input-method default-input-method))
+;;;###autoload
+(defun tcode-inactivate-input-method ()
+  (interactive)
+  (inactivate-input-method))
+;;;###autoload
+(defun tcode-inactivate-input-method-recenter ()
+  (interactive)
+  (inactivate-input-method)
+  (recenter-top-bottom))
+
+
 (provide 'tc-util)
 
 ;;; tc-util.el ends here
