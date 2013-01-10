@@ -12,10 +12,10 @@
 @end iftex
 @comment %**end of header (This is for running Texinfo on a region.)
 
-@set VERSION 2.3
-@set EDITION 2.4
-@set UPDATE-MONTH 2003年3月
-@set UPDATED 2003年3月17日
+@set VERSION 2.4
+@set EDITION 2.5
+@set UPDATE-MONTH 2012年12月
+@set UPDATED 2012年12月31日
 
 @ifinfo
 @set KUTEN .
@@ -2274,8 +2274,52 @@ tcode-mazegaki-show-yomi-region}とすることで、その語幹を持つ読みを探すこ
 適当なキーに割り当てて使用するとよいでしょう(@pxref{Changing T-Code mode key,
 Tコードモードでのキー割り当ての変更, Tコードモードでのキー割り当ての変更})。
 
+@findex tcode-katakana-previous-chars
+カーソル前でひらがなや「ー」が続く間、カタカナへ変換します。
+ただし、交ぜ書き変換の読みがあれば、読みをカタカナとして確定します。
+
+また、ひらがなとして残す文字数を引数で指定可能です。
+カタカナに変換する文字列が長くて文字数を数えるのが面倒な場合向けです。
+「例えばあぷりけーしょん」2文字残してカタカナ変換→「例えばアプリケーション」
+
+@findex tcode-katakana-shrink
+直前の後置型カタカナ変換を縮めます。
+繰り返し実行することも可能です。
+
+これらのカタカナ変換に関して、TUTコードでの設定例を次に示します。
+
+@lisp
+(add-hook 'tcode-after-load-table-hook
+	   (lambda ()
+	     (when (eq tcode-input-method 'tutcode)
+	       (tcode-set-action-to-table
+	        '(20 28 0) ; al1
+	        (lambda () (tcode-katakana-previous-char 1)))
+	       ;; ...
+	       (tcode-set-action-to-table
+	        '(20 28 8) ; al9
+	        (lambda () (tcode-katakana-previous-char 9)))
+	       (tcode-set-action-to-table
+	        '(20 28 28) ; all
+	        (lambda () (tcode-katakana-previous-chars 0)))
+	       (tcode-set-action-to-table
+	        '(20 28 10) ; alw
+	        (lambda () (tcode-katakana-previous-chars 1)))
+	       ;; ...
+	       (tcode-set-action-to-table
+	        '(20 28 15) ; aly
+	        (lambda () (tcode-katakana-previous-chars 6)))
+	       (tcode-set-action-to-table
+	        '(20 28 30) ; alz
+	        (lambda () (tcode-katakana-shrink 1)))
+	       ;; ...
+	       (tcode-set-action-to-table
+	        '(20 28 34) ; alb
+	        (lambda () (tcode-katakana-shrink 5))))))
+@end lisp
+
 @findex tcode-katakana-preceding-chars
-また、これとは別の方法として、コマンド
+また、これらとは別の方法として、コマンド
 @code{tcode-katakana-preceding-chars}を用いる方法もあります。
 これは、たとえば、この機能を@key{%}に割り当てているとすると、
 @kbd{%}を1回入力すると、直前の1字がひらがなならカタカナになります。

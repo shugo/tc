@@ -497,6 +497,40 @@ PREFIX が nil でなければリージョン中の文字列で始まる文字列を探す。"
 	 (tcode-display-direct-stroke
 	  (char-to-string (tcode-preceding-char)))
 	 (tcode-auto-remove-help-char))))
+
+(defvar tcode-katakana-begin-point (point-min)
+  "直前の後置型カタカナ変換の開始位置")
+(defvar tcode-katakana-end-point (point-min)
+  "直前の後置型カタカナ変換の終了位置")
+
+(defun tcode-katakana-previous-chars (&optional hiracnt)
+  "現ポイント以前で連続するひらがなや「ー」をカタカナに変換する。
+ひらがなとして残す文字数を HIRACNT で指定可能。
+ただし、交ぜ書き変換の読みがあれば、読みをカタカナとして確定する。"
+  (interactive "*p")
+  (if tcode-mazegaki-prefix
+      (let ((beg tcode-mazegaki-prefix))
+	(tcode-mazegaki-restore-yomi-and-quit)
+	(japanese-katakana-region beg (point)))
+    (save-excursion
+      (let* ((end (point))
+	     (beg0 (re-search-backward "[^ぁ-んー]" nil t))
+	     (beg (and beg0 (min (+ beg0 1 (or hiracnt 0)) end))))
+	(when (and beg (< beg end))
+	  (setq tcode-katakana-begin-point beg)
+	  (setq tcode-katakana-end-point end)
+	  (japanese-katakana-region beg end))))))
+
+(defun tcode-katakana-shrink (&optional cnt)
+  "直前の後置型カタカナ変換を縮める"
+  (interactive "*p")
+  (when (and (= (point) tcode-katakana-end-point)
+	     (> tcode-katakana-end-point tcode-katakana-begin-point))
+    (let ((hiraend (min (+ tcode-katakana-begin-point (or cnt 1))
+			tcode-katakana-end-point)))
+      (save-excursion
+	(japanese-hiragana-region tcode-katakana-begin-point hiraend))
+      (setq tcode-katakana-begin-point hiraend))))
 
 ;;;; 区点・JIS コードによる漢字入力
 
