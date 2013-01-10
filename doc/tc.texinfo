@@ -424,51 +424,14 @@ Tコードオープンラボ@code{http://openlab.ring.gr.jp/tcode/}でTコード関連
 の情報を公開しています。
 
 Emacs用のTコード入力環境tc2のサポートページは
-@code{http://openlab.ring.gr.jp/tcode/tc2/}です。
+@code{https://github.com/kanchoku/tc}です。
 
 @unnumberedsubsec Tコードメーリングリスト
 @cindex メーリングリスト
 
 Tコード のメーリングリストが運営されています。
 Tコードに興味を持つ人であれば、誰でも入会できます。
-内容、あるいは参加方法について知りたい人は、
-@code{tcode-ml@@is.s.u-tokyo.ac.jp}宛に
-@code{# guide}という内容のメールを送ってください。下はその例です。
-
-@example
-% echo '# guide' | mail tcode-ml@@is.s.u-tokyo.ac.jp
-@end example
-
-ニフティサーブからメーリングリストに参加したい場合には、
-@code{INET:tcode-ml@@is.s.u-tokyo.ac.jp}あてに
-@code{# guide}の1行からなるメールを送ってください。
-
-@unnumberedsubsec ニフティサーブ
-@cindex ニフティサーブ
-
-ニフティサーブのFKBOARDでは、Tコード等の直接入力方式に関する
-会議室が開かれています。この会議室の最初の方には
-直接入力入門者のための非常に分かりやすい説明が
-多数登録されています。
-
-また、次のPatioが直接入力に関するものです。
-
-@enumerate
-@item
-ID: NBH00475 (情報のやりとり)
-
-管理人: かぜはるか (email: @code{nbh00475@@nifterserve.or.jp})
-
-@item
-ID: GGB03565 (関連データの登録)
-
-管理人: m(as)m (email: @code{ggb03565@@nifterserve.or.jp})
-@end enumerate
-
-@noindent
-いちおうクローズドな形態になっていますので、参加を希望する方は、
-それぞれの管理人にメールして下さい。Passwordを教えてくれます。
-
+Tコード ユーザー・グループ @code{http://groups.google.com/group/tcode}
 
 @node How to setup, "Practice makes perfect!", Overview, Top
 @comment  node-name,  next,  previous,  up
