@@ -240,7 +240,7 @@ BODY should be a list of lisp expressions."
       ;; XEmacs
       (or (fboundp 'isearch-last-command-char)
 	  (defun isearch-last-command-char ()
-	    last-command-char))
+	    last-command-event))
       (or (boundp 'search-upper-case)
 	  (setq search-upper-case 'not-yanks)))
   ;; NEmacs
