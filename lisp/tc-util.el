@@ -515,14 +515,26 @@ PREFIX が nil でなければリージョン中の文字列で始まる文字列を探す。"
     (save-excursion
       (let* ((end (point))
 	     (beg0 (re-search-backward "[^ぁ-んー]" nil t))
-	     (beg (and beg0 (min (+ beg0 1 (or hiracnt 0)) end))))
-	(when (and beg (< beg end))
+	     (beg (+ (if beg0
+			 ;; 「キーとばりゅー」に対して1文字残してカタカナ変換で
+			 ;; 「キーとバリュー」になるように始まりの「ー」は除く
+			 (if (and (looking-at ".ー")
+				  (re-search-forward "[ぁ-ん]" end t))
+			     (match-beginning 0)
+			   (+ beg0 1))
+		       (point-min))
+		     (or hiracnt 0))))
+	(when (< beg end)
 	  (setq tcode-katakana-begin-point beg)
 	  (setq tcode-katakana-end-point end)
 	  (japanese-katakana-region beg end))))))
 
 (defun tcode-katakana-shrink (&optional cnt)
   "直前の後置型カタカナ変換を縮める"
+  ;; 単にカタカナを縮めるのではなく、直前の後置型カタカナ変換を縮める。
+  ;; 「キーとばりゅー」後置型カタカナ変換→「キートバリュー」
+  ;; 直前の後置型カタカナ変換を1文字縮める→「キーとバリュー」
+  ;; (もし単にカタカナを縮めると→「きートバリュー」)
   (interactive "*p")
   (when (and (= (point) tcode-katakana-end-point)
 	     (> tcode-katakana-end-point tcode-katakana-begin-point))
