@@ -99,29 +99,48 @@
 	  (beginning-of-line)
 	  (looking-at (regexp-quote str))))))
 
+;;; (defun tcode-bushu-parse-entry ()
+;;;   "現在の行を文字のリストとして返す。
+;;; ポイントは行末に移動する。"
+;;;   (if (eobp)
+;;;       nil
+;;;     (string-to-list
+;;; 	     (buffer-substring (point)
+;;; 			       (progn (end-of-line) (point))))))
+
 (defun tcode-bushu-b2s (x)
   "漢字の構成部品(部首)を文字列に変換する。"
   (if (stringp x) x (char-to-string x)))
 
+(defun tcode-bushu-bl2s (l)
+  "漢字の構成部品(部首)のリストを文字列に変換する。"
+  (mapconcat 'tcode-bushu-b2s l nil))
+
 (defun tcode-bushu-parse-entry ()
   "現在の行を文字のリストとして返す。
+ただし{}で囲まれた部分は文字列として返す。
 ポイントは行末に移動する。"
   (if (eobp)
       nil
-    (string-to-list
-	     (buffer-substring (point)
-			       (progn (end-of-line) (point))))))
+    (let (ret)
+      (while (looking-at "\\([^{}\n]*\\)\\({[^{}\n]*}\\)")
+	(setq ret (nconc ret (string-to-list (match-string 1))
+			 (list (match-string 2))))
+	(goto-char (match-end 0)))
+      (nconc ret (string-to-list (buffer-substring
+				  (point) (progn (end-of-line) (point))))))))
 
 (defun tcode-bushu-for-char (char)
-  "CHARを構成する部首のリストを返す。"
-  (let* ((str (char-to-string char))
+  "CHARを構成する部首のリストを返す。
+CHARとして文字列も受け付ける。"
+  (let* ((str (tcode-bushu-b2s char))
 	 (cache (get (intern-soft str tcode-stroke-table) 'bushu)))
     (if (and cache
 	     tcode-bushu-use-cache)
-	(string-to-list cache)
-      (if (memq char tcode-bushu-list)
+	(copy-sequence cache)
+      (if (member char tcode-bushu-list)
 	  (progn
-	    (put (intern str tcode-stroke-table) 'bushu str)
+	    (put (intern str tcode-stroke-table) 'bushu (list char))
 	    (list char))
 	(save-excursion
 	  (set-buffer (get-buffer tcode-bushu-expand-buffer-name))
@@ -129,9 +148,9 @@
 	      (let ((bushu-list (cdr (tcode-bushu-parse-entry))))
 		(put (intern str tcode-stroke-table)
 		     'bushu
-		     (mapconcat 'char-to-string bushu-list nil))
-		bushu-list)
-	    (put (intern str tcode-stroke-table) 'bushu str)
+		     bushu-list)
+		(copy-sequence bushu-list))
+	    (put (intern str tcode-stroke-table) 'bushu (list char))
 	    (list char)))))))
 
 (defun tcode-bushu-lookup-index2-entry-internal (str)
@@ -143,27 +162,44 @@
 
 (defun tcode-bushu-lookup-index2-entry-1 (char)
   "CHARを部首として持つ文字のリストを返す。
-返すリストにはCHARも含まれる。"
-  (cons char (tcode-bushu-lookup-index2-entry-internal (string char))))
+返すリストにはCHARも含まれる。
+CHARとして文字列も受け付ける。"
+  (cons char (tcode-bushu-lookup-index2-entry-internal (tcode-bushu-b2s char))))
+
+(defun tcode-bushu-< (char1 char2)
+  "部首CHAR1とCHAR2の順序関係。
+CHAR1, CHAR2として文字列も受け付ける。"
+  (if (stringp char1)
+      (if (stringp char2)
+	  (string< char1 char2)
+	t)
+    (if (stringp char2)
+	nil
+      (< char1 char2))))
 
 (defun tcode-bushu-lookup-index2-entry-2 (char char2)
-  "CHARとCHAR2を部首として持つ文字のリストを返す。"
-  (let ((str (if (<= char char2)
-		 (string char char2)
-	       (string char2 char))))
+  "CHARとCHAR2を部首として持つ文字のリストを返す。
+CHARとして文字列も受け付ける。"
+  (let ((str (if (tcode-bushu-< char char2)
+		 (concat (tcode-bushu-b2s char) (tcode-bushu-b2s char2))
+	       (concat (tcode-bushu-b2s char2) (tcode-bushu-b2s char)))))
     (tcode-bushu-lookup-index2-entry-internal str)))
 
 (defun tcode-bushu-lookup-index2-entry-many (char n)
   "CHARをN個以上部首として持つ文字のリストを返す。"
   (if (= n 1)
       (tcode-bushu-lookup-index2-entry-1 char)
-    (tcode-bushu-lookup-index2-entry-internal (make-string n char))))
+    (tcode-bushu-lookup-index2-entry-internal
+     (if (stringp char)
+	 (apply 'concat (make-list n char))
+       (make-string n char))
+     )))
 
 (defun tcode-count (elt list)
   "LIST中のELTの数を返す。"
   (let ((n 0))
     (while list
-      (if (eq elt (car list))
+      (if (equal elt (car list))
 	  (setq n (1+ n)))
       (setq list (cdr list)))
     n))
@@ -201,7 +237,7 @@
 		(ret nil) l)
 	   (while included
 	     (setq l (tcode-bushu-for-char (car included)))
-	     (if (and (eq bushu (car l))
+	     (if (and (equal bushu (car l))
 		      (null (cdr l)))
 		 (setq ret (cons (car included) ret)))
 	     (setq included (cdr included)))
@@ -213,11 +249,11 @@
 		(ret nil) l)
 	   (while included
 	     (setq l (tcode-bushu-for-char (car included)))
-	     (if (or (and (eq bushu1 (car l))
-			  (eq bushu2 (nth 1 l))
+	     (if (or (and (equal bushu1 (car l))
+			  (equal bushu2 (nth 1 l))
 			  (null (nthcdr 2 l)))
-		     (and (eq bushu2 (car l))
-			  (eq bushu1 (nth 1 l))
+		     (and (equal bushu2 (car l))
+			  (equal bushu1 (nth 1 l))
 			  (null (nthcdr 2 l))))
 		 (setq ret (cons (car included) ret)))
 	     (setq included (cdr included)))
@@ -237,7 +273,7 @@
   (let* ((ret (copy-sequence list))
 	 (l ret))
     (while l
-      (setcdr l (delq (car l) (cdr l)))
+      (setcdr l (delete (car l) (cdr l)))
       (setq l (cdr l)))
     ret))
 
@@ -248,7 +284,7 @@
 (defun tcode-bushu-add-to-index2 (char component)
   (save-excursion
     (set-buffer (get-buffer tcode-bushu-index2-buffer-name))
-    (setq component (sort component '<))
+    (setq component (sort component 'tcode-bushu-<))
     (let ((l nil) bushu)
       (while component
 	(setq bushu (car component)
@@ -259,23 +295,23 @@
 	    (setq bushu2 (car tmp)
 		  tmp (cdr tmp)
 		  l (cons (list bushu bushu2) l))
-	    (when (eq bushu bushu2)
+	    (when (equal bushu bushu2)
 	      (let ((n 2))
-		(while (eq bushu (car tmp))
+		(while (equal bushu (car tmp))
 		  (setq n (1+ n)
 			component (cdr component)
 			tmp (cdr tmp)))
 		(if (> n 2)
 		    (setq l (cons (make-list n bushu) l)))))
-	    (while (eq bushu2 (car tmp))
+	    (while (equal bushu2 (car tmp))
 	      (setq tmp (cdr tmp)))
 	    ))
-	(while (eq bushu (car component))
+	(while (equal bushu (car component))
 	  (setq component (cdr component)))
 	)
       (while l
-	(if (tcode-bushu-search (concat (apply 'string (car l)) " "))
-	    (unless (memq char (nthcdr 3 (tcode-bushu-parse-entry)))
+	(if (tcode-bushu-search (concat (tcode-bushu-bl2s (car l)) " "))
+	    (unless (member char (nthcdr 3 (tcode-bushu-parse-entry)))
 	      (insert char))
 	  (apply 'insert (car l))
 	  (insert ?\  char ?\n))
@@ -312,20 +348,20 @@
 (defun tcode-bushu-expand-add-entry (char component)
   (save-excursion
     (set-buffer (get-buffer tcode-bushu-expand-buffer-name))
-    (if (not (tcode-bushu-search (char-to-string char)))
-	(insert char (mapconcat 'char-to-string component nil) ?\n)
+    (if (not (tcode-bushu-search (tcode-bushu-b2s char)))
+	(insert char (tcode-bushu-bl2s component) ?\n)
       (end-of-line)
-      (insert (mapconcat 'char-to-string component nil)))))
+      (insert (tcode-bushu-bl2s component)))))
 
 (defun tcode-bushu-expand-char (char trace)
-  (if (memq char tcode-bushu-list)
+  (if (member char tcode-bushu-list)
       (list char)
-    (let ((str (char-to-string char)))
+    (let ((str (tcode-bushu-b2s char)))
       (save-excursion
 	(set-buffer (get-buffer tcode-bushu-expand-buffer-name))
 	(tcode-bushu-search str)
 	(let ((entry (tcode-bushu-parse-entry)))
-	  (if (and entry (= char (car entry)))
+	  (if (and entry (equal char (car entry)))
 	      ;; すでに展開済み
 	      (cdr entry)
 	    ;; 展開はまだ。
@@ -334,13 +370,13 @@
 		(tcode-bushu-search str)
 	      (beginning-of-line))
 	    (let ((entry (tcode-bushu-parse-entry)))
-	      (if (and entry (= char (car entry)))
+	      (if (and entry (cdr entry) (equal char (car entry)))
 		  ;; 展開できる
 		  (let ((component
 			 (apply 'nconc
 				(mapcar
 				 (lambda (bushu)
-				   (if (memq bushu trace)
+				   (if (member bushu trace)
 				       ;; 循環している
 				       (list ?⊥ bushu)
 				     (tcode-bushu-expand-char
@@ -359,6 +395,18 @@
   (tcode-set-work-buffer tcode-bushu-reverse-buffer-name
 			 tcode-bushu-reverse-dictionary-name
 			 t)
+  (goto-char (point-min))
+  (while (search-forward-regexp "[ \t]*;.*$" nil t)
+    (delete-region (match-beginning 0) (match-end 0)))
+  (goto-char (point-min))
+  (while (search-forward-regexp "\n\n+" nil t)
+    (delete-region (1+ (match-beginning 0)) (match-end 0)))
+  (goto-char (point-min))
+  (while (search-forward-regexp "^\\([^{}\n]\\|{[^{}\n]*}\\)+\\([^{}\n]\\|{[^{}\n]*}\\)3" nil t)
+    (let ((str (match-string 2)))
+      (goto-char (match-beginning 2))
+      (delete-region (point) (match-end 2))
+      (insert str str str)))
   (let ((bushu-expand-buf (get-buffer-create tcode-bushu-expand-buffer-name))
 	(coding-system (and (boundp 'buffer-file-coding-system)
 			    buffer-file-coding-system))
@@ -411,9 +459,9 @@ FORCEがnilでない場合は再読み込みする。"
       (tcode-set-work-buffer tcode-bushu-index2-buffer-name
 			     tcode-bushu-index2-file-name)
       (goto-char (point-min))
-      (while (re-search-forward "^. " nil t)
+      (while (re-search-forward "^\\(.\\|{[^{}\n]*}\\) " nil t)
 	(beginning-of-line)
-	(let ((bushu (tcode-following-char)))
+	(let ((bushu (match-string 1)))
 	  (setq tcode-bushu-list (cons bushu tcode-bushu-list))
 	  (forward-line 1)))
       (setq tcode-bushu-list (nreverse tcode-bushu-list)))))
@@ -449,15 +497,15 @@ FORCEがnilでない場合は再読み込みする。"
 ;;; 部首合成変換用基本演算
 ;;;
 
-(defun tcode-delq-first-element (elt list)
+(defun tcode-delete-first-element (elt list)
   "Delete first ELT in LIST with side effect."
   (if list
-      (if (eq elt (car list))
+      (if (equal elt (car list))
 	  (cdr list)
 	(let ((l list))
 	  (catch 'found
 	    (while l
-	      (when (eq elt (car (cdr l)))
+	      (when (equal elt (car (cdr l)))
 		(setcdr l (cdr (cdr l)))
 		(throw 'found t))
 	      (setq l (cdr l))))
@@ -471,9 +519,9 @@ FORCEがnilでない場合は再読み込みする。"
 	intersection)
     (while (and list1 l2)
       (let ((elt (car list1)))
-	(when (memq elt l2)
+	(when (member elt l2)
 	  (setq intersection (cons elt intersection)
-		l2 (tcode-delq-first-element elt l2)))
+		l2 (tcode-delete-first-element elt l2)))
 	(setq list1 (cdr list1))))
     (nreverse intersection)))
 
@@ -489,8 +537,8 @@ FORCEがnilでない場合は再読み込みする。"
 		 (diff (abs (- c1 c2))))
 	    (if (> diff 0)
 		(setq ci (nconc ci (make-list diff e))))
-	    (setq l1 (delq e l1)
-		  l2 (delq e l2))))
+	    (setq l1 (delete e l1)
+		  l2 (delete e l2))))
 	(nconc ci l1 l2))
     list1))
 
@@ -526,7 +574,7 @@ FORCEがnilでない場合は再読み込みする。"
 		(included
 		 (if (> n 1)
 		     (progn
-		       (setq bushu-list (delq bushu bushu-list))
+		       (setq bushu-list (delete bushu bushu-list))
 		       (tcode-bushu-included-char-list bushu n))
 		   (setq bushu-list (cdr bushu-list))
 		   (tcode-bushu-lookup-index2-entry-2
@@ -548,14 +596,14 @@ FORCEがnilでない場合は再読み込みする。"
 	  (let ((b1 (car bushu1))
 		(b2 (car bushu2))
 		(r (car ref)))
-	    (cond ((and (= r b1)
-			(/= r b2))
+	    (cond ((and (equal r b1)
+			(not (equal r b2)))
 		   (throw 'done t))
-		  ((and (/= r b1)
-			(= r b2))
+		  ((and (not (equal r b1))
+			(equal r b2))
 		   (throw 'done nil))
-		  ((and (/= r b1)
-			(/= r b2))
+		  ((and (not (equal r b1))
+			(not (equal r b2)))
 		   (throw 'done default)))
 	    (setq bushu1 (cdr bushu1)
 		  bushu2 (cdr bushu2)
@@ -566,7 +614,8 @@ FORCEがnilでない場合は再読み込みする。"
 (defun tcode-bushu-priority-level (char)
   "CHARが変数`tcode-bushu-prioritized-chars'の何番目にあるかを返す。
 なければ nil を返す。"
-  (if tcode-bushu-prioritized-chars
+  (if (and tcode-bushu-prioritized-chars
+	   (not (stringp char)))
       (let* ((priority-list
 	      (string-to-list tcode-bushu-prioritized-chars))
 	     (char-list (memq char priority-list)))
@@ -586,6 +635,7 @@ FORCEがnilでない場合は再読み込みする。"
 	   (apply '+ (mapcar evfunc s2))))
     (< (length s1) (length s2))))
 
+(defvar bushu-list)
 (defun tcode-bushu-less-p (char1 char2 &optional many)
   "CHAR1がCHAR2より優先度が高いか?
 自由変数BUSHU-LISTで指定された部首リストを基準とする。
@@ -615,8 +665,12 @@ nilでない場合は多い方が優先される。"
 				 'default)))
 		       (if (not (eq val 'default))
 			   val
-			 (let ((s1 (tcode-encode char1))
-			       (s2 (tcode-encode char2)))
+			 (let ((s1 (if (stringp char1)
+				       nil
+				     (tcode-encode char1)))
+			       (s2 (if (stringp char2)
+				       nil
+				     (tcode-encode char2))))
 			   (cond ((and s1 s2)
 				  (tcode-easier-stroke-p s1 s2))
 				 (s1
@@ -624,7 +678,7 @@ nilでない場合は多い方が優先される。"
 				 (s2
 				  nil)
 				 (t
-				  (< char1 char2)))))))))
+				  (tcode-bushu-< char1 char2)))))))))
 	  (if many
 	      (> l1 l2)
 	    (< l1 l2)))
@@ -641,7 +695,7 @@ nilでない場合は多い方が優先される。"
 	 (r (tcode-bushu-superset bushu-list)))
     (catch 'not-found
       (mapcar (lambda (c)
-		(unless (setq r (delq c r))
+		(unless (setq r (delete c r))
 		  (throw 'not-found nil)))
 	      char-list)
       (sort r 'tcode-bushu-less-p))))
@@ -659,7 +713,7 @@ nilでない場合は多い方が優先される。"
 	   (tcode-bushu-higher-priority-p (tcode-bushu-for-char char1)
 					  (tcode-bushu-for-char char2)
 					  bushu-list
-					  (< char1 char2))))))
+					  (tcode-bushu-< char1 char2))))))
 
 (defun tcode-bushu-include-all-chars-bushu-p (char char-list)
   (let* ((bushu (tcode-bushu-for-char char))
@@ -687,7 +741,7 @@ nilでない場合は多い方が優先される。"
 	 (rest (cdr char-list))
 	 (all-list 
 	  (tcode-uniq
-	   (delq char
+	   (delete char
 		 (apply 'nconc
 			(mapcar
 			 (if rest
@@ -739,11 +793,11 @@ nilでない場合は多い方が優先される。"
 		       (null d2)))
 	      nil
 	    (if rest
-		(delq char
-		      (tcode-bushu-strong-diff-set rest (or d1 d2) complete))
-	      (sort (delq char (if complete
-				   (tcode-char-list-for-bushu (or d1 d2))
-				 (tcode-bushu-subset (or d1 d2)))) 
+		(delete char
+			(tcode-bushu-strong-diff-set rest (or d1 d2) complete))
+	      (sort (delete char (if complete
+				     (tcode-char-list-for-bushu (or d1 d2))
+				   (tcode-bushu-subset (or d1 d2)))) 
 		    'tcode-bushu-less-or-many-p))))
       nil)))
 
@@ -766,17 +820,18 @@ nilでない場合は多い方が優先される。"
 			   (tcode-complement-intersection common-list
 							  new-common-list)))))
 	  (if rest
-	      (delq char (tcode-bushu-all-diff-set rest
-						   new-bushu-list
-						   new-common-list))
+	      (delete char (tcode-bushu-all-diff-set rest
+						     new-bushu-list
+						     new-common-list))
 	    (tcode-uniq
-	     (delq char (apply 'nconc
-			       (mapcar
-				(lambda (bushu)
-				  (let ((cl (copy-sequence new-common-list)))
-				    (tcode-bushu-subset
-				     (append new-bushu-list (delq bushu cl)))))
-				new-common-list))))))
+	     (delete char (apply 'nconc
+				 (mapcar
+				  (lambda (bushu)
+				    (let ((cl (copy-sequence new-common-list)))
+				      (tcode-bushu-subset
+				       (append new-bushu-list
+					       (delete bushu cl)))))
+				  new-common-list))))))
       nil)))
 
 (defun tcode-bushu-weak-diff-set (char-list)
@@ -816,7 +871,9 @@ nilでない場合は多い方が優先される。"
 
 (defun tcode-bushu-compose-explicitly (char-list)
   (if (or (cdr (cdr char-list))
-	  (null (nth 1 char-list)))
+	  (null (nth 1 char-list))
+	  (stringp (car char-list))
+	  (stringp (nth 1 char-list)))
       ;; only for 2-char composition
       nil
     (save-excursion
@@ -824,12 +881,15 @@ nilでない場合は多い方が優先される。"
 			     tcode-bushu-help-dictionary-name
 			     nil t)
       (goto-char (point-min))
-      (if (let ((c1 (regexp-quote (char-to-string (car char-list))))
-		(c2 (regexp-quote (char-to-string (nth 1 char-list)))))
-	    (or (re-search-forward (concat "^." c1 c2 "\\*?\n") nil t)
-		(re-search-forward (concat "^." c2 c1 "\\*\n") nil t)))
+      (if (let* ((case-fold-search nil)
+		 (c1 (regexp-quote (char-to-string (car char-list))))
+		 (c2 (regexp-quote (char-to-string (nth 1 char-list))))
+		 (reg (concat "\\(^.\\| \\)\\("
+			      c1 c2 "\\*?\\|" c2 c1
+			      "\\*\\)\\( \\|$\\)")))
+	    (re-search-forward reg nil t))
 	  (progn
-	    (forward-line -1)
+	    (beginning-of-line)
 	    (list (tcode-following-char)))))))
 
 ;;;

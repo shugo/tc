@@ -111,19 +111,64 @@ nil の場合では見つからないような場合でも、non-nil にすれば見つかる場合が
 ;;; 部首合成変換のへルプ
 ;;;
 
-(defun tcode-bushu-help-lookup (str)
+(defun tcode-another-stroke (c)
+  (if tcode-another-table
+      (let ((i (1- (length tcode-another-table))))
+	(catch 'found
+	  (while (>= i 0)
+	    (let ((c2 (aref tcode-another-table i)))
+	      (if (null c2)
+		  (when (eq i (tcode-char-to-key c))
+		    (setq c2 c))
+		(when (symbolp c2)
+		  (setq c2 (symbol-value c2)))
+		(when (stringp c2)
+		  (setq c2 (string-to-list c2)))
+		(when (and (consp c2) (null (cdr c2)))
+		  (setq c2 (car c2))))
+	      (if (eq c2 c)
+		  (throw 'found i)))
+	    (setq i (1- i)))))
+    (when (and (<= 32 c) (<= c ?~))
+      (let ((key (tcode-char-to-key c)))
+	(if (memq key '(-2 -3))
+	    nil
+	  key)))))
+
+(defun tcode-direct-input-p (c)
+  (or (let ((l (tcode-encode c))) (and l (length l)))
+      (and (tcode-another-stroke c) 2)))
+
+(defun tcode-bushu-help-lookup (str &optional norecursive)
   (save-excursion
     (tcode-set-work-buffer tcode-bushu-help-buffer-name
 			   tcode-bushu-help-dictionary-name
 			   nil t)
     (goto-char (point-min))
-    (if (re-search-forward (format "^%s\\(.\\)\\(.\\)\\*?\n"
-				   (regexp-quote str))
-			   nil t)
-	(cons (buffer-substring (match-beginning 1)
-				(match-end 1))
-	      (buffer-substring (match-beginning 2)
-				(match-end 2))))))
+    (when (tcode-bushu-search str)
+      (forward-char)
+      (let (s1 s2 l1 l2 lis)
+	(while (looking-at "\\(.\\)\\(.\\)\\*?\\( \\|$\\)")
+	  (setq s1 (buffer-substring (match-beginning 1) (match-end 1))
+		s2 (buffer-substring (match-beginning 2) (match-end 2)))
+	  (goto-char (match-end 0))
+	  (when (and (setq l1 (tcode-direct-input-p (string-to-char s1)))
+		     (setq l2 (tcode-direct-input-p (string-to-char s2))))
+	    (setq lis (cons (cons (+ l1 l2) (cons s1 s2)) lis))))
+	(if lis
+	    (cdr (car (sort (nreverse lis) 'car-less-than-car)))
+	  (unless norecursive
+	    (beginning-of-line)
+	    (forward-char)
+	    (when (looking-at "\\(.\\)\\(.\\)\\*?\\( \\|$\\)")
+	      (setq s1 (buffer-substring (match-beginning 1) (match-end 1))
+		    s2 (buffer-substring (match-beginning 2) (match-end 2)))
+	      (unless (tcode-direct-input-p (string-to-char s1))
+		(setq s1 (tcode-bushu-help-lookup s1 t)))
+	      (unless (tcode-direct-input-p (string-to-char s2))
+		(setq s2 (tcode-bushu-help-lookup s2 t)))
+	      (and s1 s2 (cons s1 s2))
+	      )))))))
 
 (defun tcode-bushu-composed-p (char bushu1 bushu2)
   "CHARがBUSHU1とBUSHU2で合成できるか。
