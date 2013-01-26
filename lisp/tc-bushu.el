@@ -885,11 +885,29 @@ See also `tcode-bushu-functions'."
 	(tcode-bushu-select (tcode-uniq kouho-list) char-list)
       (ding))))
 
+(defun tcode-bushu-scan-backward (max)
+  "現 point より先頭方向にある日本語列または英単語一つのリストを返す。
+リストの要素は(POINT . \"文字列\")である。
+`tcode-scan-backward' と違い、英文字でも一文字の文字列で返す。
+リストの順番としては、バッファの先頭に近い文字列が先頭の側になる。
+リストの長さは最大 MAX 文字である。"
+  (save-excursion
+    (let (ch context)
+      (while (and (< (length context) max)
+		  (tcode-skip-blank-backward)
+		  (setq ch (tcode-preceding-char))
+		  (not (bobp)))
+	(progn
+	  (tcode-forward-char -1)
+	  (setq context (cons (cons (point) (char-to-string ch))
+			      context))))
+      context)))
+
 (defun tcode-bushu-convert-preceding-chars (&optional arg)
   "ポイントの前の2文字を合成する。"
   (interactive "*P")
   (tcode-bushu-init 2)
-  (let ((context (tcode-scan-backward 2)))
+  (let ((context (tcode-bushu-scan-backward 2)))
     (if (/= (length context) 2)
 	(ding)
       (let* ((prev-char (tcode-2-to-1 (tcode-string-to-char
@@ -1018,11 +1036,23 @@ See also `tcode-bushu-functions'."
 
 (add-hook 'tcode-clear-hook 'tcode-bushu-clear-prefix)
 
-(defun tcode-bushu-prefix-convert (char)
+(defun tcode-bushu-prefix-convert (arg)
+  (if (stringp arg)
+      (let ((l (string-to-list arg))
+	    tmp ret)
+	(while l
+	  (setq tmp (tcode-bushu-prefix-convert-char (car l)))
+	  (if tmp (setq ret (cons tmp ret)))
+	  (setq l (cdr l)))
+	(mapconcat (lambda (x) (if (stringp x) x (char-to-string x)))
+		   (nreverse ret) ""))
+    (tcode-bushu-prefix-convert-char arg)))
+
+(defun tcode-bushu-prefix-convert-char (char)
   (if (or (null tcode-bushu-prefix-list)
 	  (null char))
       char
-    (let* ((context (tcode-scan-backward 2))
+    (let* ((context (tcode-bushu-scan-backward 2))
 	   (car-context (car context))
 	   (cadr-context (car (cdr context)))
 	   (prev-char (cdr cadr-context))
@@ -1054,7 +1084,7 @@ See also `tcode-bushu-functions'."
 		       (tcode-display-direct-stroke (if (stringp kanji)
 							kanji
 						      (char-to-string kanji))))
-		  (tcode-bushu-prefix-convert kanji))
+		  (tcode-bushu-prefix-convert-char kanji))
 	      ;; 変換できない。
 	      (ding)
 	      nil))
@@ -1066,12 +1096,14 @@ See also `tcode-bushu-functions'."
 ;;;
 
 ;;;###autoload
-(defun tcode-bushu-begin-conversion ()
+(defun tcode-bushu-begin-conversion (&optional interactive)
   "部首合成変換を開始する。"
-  (interactive "*")
-  (if tcode-use-postfix-bushu-as-default
-      (tcode-bushu-convert-preceding-chars)
-    (tcode-bushu-put-prefix)))
+  (interactive "*P")
+  (if interactive
+      (tcode-bushu-convert-interactively)
+    (if tcode-use-postfix-bushu-as-default
+	(tcode-bushu-convert-preceding-chars)
+      (tcode-bushu-put-prefix))))
 
 ;;;###autoload
 (defun tcode-bushu-convert-interactively ()
@@ -1079,19 +1111,21 @@ See also `tcode-bushu-functions'."
   (tcode-bushu-convert-preceding-chars t))
 
 ;;;###autoload
-(defun tcode-bushu-begin-alternate-conversion ()
+(defun tcode-bushu-begin-alternate-conversion (&optional interactive)
   "`tcode-use-postfix-bushu-as-default' とは逆の部首合成変換を開始する。"
-  (interactive "*")
-  (if tcode-use-postfix-bushu-as-default
-      (tcode-bushu-put-prefix)
-    (tcode-bushu-convert-preceding-chars)))
+  (interactive "*P")
+  (if interactive
+      (tcode-bushu-convert-interactively)
+    (if tcode-use-postfix-bushu-as-default
+	(tcode-bushu-put-prefix)
+      (tcode-bushu-convert-preceding-chars))))
 
 ;;;###autoload
 (defun tcode-bushu-convert-preceding-char-interactively ()
   "ポイントの前の1文字をもとに対話的に部首合成する。"
   (interactive "*")
   (tcode-bushu-init 2)
-  (let ((context (tcode-scan-backward 1)))
+  (let ((context (tcode-bushu-scan-backward 1)))
     (if (/= (length context) 1)
 	(ding)
       (let* ((prev-char (tcode-string-to-char (cdr (car context))))
