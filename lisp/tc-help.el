@@ -174,8 +174,8 @@ nil の場合では見つからないような場合でも、non-nil にすれば見つかる場合が
   "CHARがBUSHU1とBUSHU2で合成できるか。
 正確には、BUSHU1とBUSHU2は両方とも直接入力できないといけない。"
   (and (or (null tcode-strict-help)
-	   (and (tcode-encode bushu1)
-		(tcode-encode bushu2)))
+	   (and (not (stringp bushu1)) (tcode-encode bushu1)
+		(not (stringp bushu2)) (tcode-encode bushu2)))
        (let ((composed (tcode-bushu-compose-two-chars bushu1 bushu2)))
 	 (and composed
 	      (= composed (tcode-string-to-char char))))))
@@ -193,11 +193,13 @@ nil の場合では見つからないような場合でも、non-nil にすれば見つかる場合が
 		       (if (= (length b1) 1)
 			   b1))))
 	  (mapcar (lambda (c1)
-		    (mapcar (lambda (c2)
-			      (if (= (tcode-bushu-compose-two-chars c1 c2)
-				     char)
-				  (throw 'found (cons c1 c2))))
-			    cl2))
+		    (unless (stringp c1)
+		      (mapcar (lambda (c2)
+				(unless (stringp c2)
+				  (if (= (tcode-bushu-compose-two-chars c1 c2)
+					 char)
+				      (throw 'found (cons c1 c2)))))
+			      cl2)))
 		  cl1))
 	(setq b2 (nconc b2 (list (car b1))))))))
 
@@ -536,9 +538,9 @@ FOR-HELPがnilでない場合は、直接入力できる字に分解する。"
 	     (addr (car datum))
 	     (char (car (cdr datum)))
 	     (str (car (cdr (cdr datum)))))
-	(if (< addr 40)
-	(tcode-help-stroke (tcode-get-key-location addr) char)
-	  (tcode-key-to-help-string addr))
+	(if (and (<= 0 addr) (< addr 40))
+	    (tcode-help-stroke (tcode-get-key-location addr) char)
+	  (setq char (tcode-key-to-help-string addr)))
 	(goto-line (if (= (mod i 2) 0) 3 4))
 	(end-of-line)
 	(insert "     " char "…第" str "打鍵")
@@ -567,12 +569,13 @@ FOR-HELPがnilでない場合は、直接入力できる字に分解する。"
       (setq tcode-last-help-char-list (list (tcode-string-to-char ch)))
       (if not-display
 	  msg
-	(message msg)))))
+	(message "%s" msg)))))
 
 ;;;###autoload
 (defun tcode-display-stroke-sequence (char-list &optional append)
   (if tcode-help-with-real-keys
-      (message (mapconcat (lambda (ch)
+      (message "%s"
+	       (mapconcat (lambda (ch)
 			    (tcode-display-key-for-char (char-to-string ch) t))
 			  char-list 
 			  "  "))
@@ -625,7 +628,7 @@ FOR-HELPがnilでない場合は、直接入力できる字に分解する。"
 	  (setq decomposed-string
 		(if strokes
 		    (concat "{"
-			    (mapconcat 'char-to-string
+			    (mapconcat 'tcode-bushu-b2s
 				       (tcode-bushu-for-char
 					(tcode-string-to-char ch))
 				       ", ")
