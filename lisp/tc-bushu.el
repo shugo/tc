@@ -38,6 +38,9 @@
 文字列で指定する。"
   :type 'string :group 'tcode)
 
+(defvar tcode-bushu-inhibited-output-regexp
+  "^\\({.*}\\|[えしへアイウエオカクケサシタチテトニヌネノハヒホムメヨリルレロワン]\\)$")
+
 (defvar tcode-bushu-reverse-dictionary-name "bushu.rev"
   "逆引き部首合成辞書のファイル名")
 (defconst tcode-bushu-reverse-buffer-name " *tcode: bushu reverse dictionary*")
@@ -95,6 +98,10 @@
 	(progn
 	  (beginning-of-line)
 	  (looking-at (regexp-quote str))))))
+
+(defun tcode-bushu-b2s (x)
+  "漢字の構成部品(部首)を文字列に変換する。"
+  (if (stringp x) x (char-to-string x)))
 
 (defun tcode-bushu-parse-entry ()
   "現在の行を文字のリストとして返す。
@@ -698,10 +705,11 @@ nilでない場合は多い方が優先される。"
 		  all-list))))
 
 (defun tcode-bushu-weak-compose-set (char-list)
-  (let ((bushu-list (apply 'nconc (mapcar 'tcode-bushu-for-char char-list))))
-    (sort (tcode-subtract-set (tcode-bushu-all-compose-set char-list)
-			      (tcode-bushu-strong-compose-set char-list))
-	  'tcode-bushu-less-p)))
+  (when (cdr char-list) ;; char-list が一文字だけの時は何もしない
+    (let ((bushu-list (apply 'nconc (mapcar 'tcode-bushu-for-char char-list))))
+      (sort (tcode-subtract-set (tcode-bushu-all-compose-set char-list)
+				(tcode-bushu-strong-compose-set char-list))
+	    'tcode-bushu-less-p))))
 
 (defun tcode-bushu-subset (bushu-list)
   (delq nil
@@ -842,13 +850,25 @@ nilでない場合は多い方が優先される。"
 	    (put (intern str tcode-stroke-table) 'compose selected-char)
 	    selected-char)))))
 
+(defun tcode-bushu-funcall (func char-list)
+  (let ((r (funcall func char-list)))
+    (if tcode-bushu-inhibited-output-regexp
+	(delq nil (mapcar (lambda (x)
+			    (if (string-match
+				 tcode-bushu-inhibited-output-regexp
+				 (tcode-bushu-b2s x))
+				nil
+			      x))
+			  r))
+      r)))
+
 (defun tcode-bushu-compose (char-list)
   "Compose a character from characters in CHAR-LIST.
 See also `tcode-bushu-functions'."
   (catch 'found
     (mapcar
      (lambda (function)
-       (let ((r (funcall function char-list)))
+       (let ((r (tcode-bushu-funcall function char-list)))
 	 (if r
 	     (throw 'found (car r)))))
      tcode-bushu-functions)
@@ -858,7 +878,8 @@ See also `tcode-bushu-functions'."
   "CHAR-LISTをもとに対話的に合成する。"
   (tcode-bushu-load-dictionary)
   (let ((kouho-list (apply 'nconc (mapcar (lambda (function)
-					    (funcall function char-list))
+					    (tcode-bushu-funcall
+					     function char-list))
 					  tcode-bushu-functions))))
     (if kouho-list
 	(tcode-bushu-select (tcode-uniq kouho-list) char-list)
@@ -904,17 +925,23 @@ See also `tcode-bushu-functions'."
 		      (mapconcat 'char-to-string char-list nil)
 		      (if (stringp 1st-kouho)
 			  1st-kouho
-			(char-to-string 1st-kouho)))))
+			(char-to-string 1st-kouho))))
+	 (rest-kouho-str (mapconcat (lambda (e) 
+				      (if (stringp e)
+					  e
+					(char-to-string e)))
+				    rest-kouho
+				    " "))
+	 (w (- (window-width (minibuffer-window))
+	       5 (string-width msg) (string-width rest-kouho-str))))
     (message 
      (if rest-kouho
-	 (format "%s [%s]" 
-		 msg 
-		 (mapconcat (lambda (e) 
-			      (if (stringp e)
-				  e
-				(char-to-string e)))
-			    rest-kouho
-			    " "))
+	 (if (> w 0)
+	     (format "%s [%s]" msg rest-kouho-str)
+	   (format (format "%%s [%%.%ds..."
+			   (- (window-width (minibuffer-window))
+			      5 (string-width msg)))
+		   msg rest-kouho-str))
        msg))))
 
 (defun tcode-bushu-select (kouho-list char-list)
