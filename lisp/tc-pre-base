@@ -95,7 +95,7 @@ nemacs, mule-1, mule-2, mule-3, mule-4, xemacsのいずれか。")
 
 ;;;; Version
 
-(defconst tcode-version "2.3.1")
+(defconst tcode-version "3.0")
 
 (defun tcode-version ()
   "Tコード入力環境のバージョンを表示する。"
